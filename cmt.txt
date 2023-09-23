@@ -1,0 +1,59 @@
+python train.py --model_type HDNeRV --model_size M -b 1 --ver -e 1600 --weight D-NeRV_L.pth -d
+python train.py --model_type HDNeRV --model_size S -b 1 --ver -e 1600 --weight checkpoints/DNeRV/D-NeRV_L.pth -d
+python train.py --model_type HDNeRV --model_size L -b 32 --ver -e 1600 --weight checkpoints/DNeRV/D-NeRV_L.pth -d
+
+python train.py --model_type RAFT --model_size S -b 1 --ver
+/home/jun/anaconda3/bin/tensorboard --logdir=logs/
+
+python train.py --model_type HDNeRV2 --model_size M -b 4 --ver --enc_block 3 3 9 3 3
+
+CUDA_VISIBLE_DEVICES=1 python train.py --model_type HDNeRV2 --model_size M -b 4 --ver --enc_block 3 3 9 3 3 --ignore
+
+python train.py --model_type D-NeRV --model_size M -b 1
+
+python train.py --model_type HDNeRV2 --model_size M -b 8 --ver --enc_block 3 3 9 3 3 --ignore -d --weight b4.pth
+
+
+python train.py --model_type HDNeRV2 --model_size M -b 4 --ver --enc_block 3 3 9 3 3
+
+python train.py --model_type HDNeRV2 --model_size S -b 4 --ver --enc_block 3 3 9 3 3
+
+python train.py --model_type HDNeRV2 --model_size L -b 4 --ver --enc_block 3 3 9 3 3
+
+
+python train.py --model_type HDNeRV3 --model_size M -b 4 --ver --enc_block 3 3 9 3 3
+
+
+
+
+python train.py --dataset UVG --model_type HDNeRV3 --model_size S \
+        --eval_only --weight checkpoints/HDNeRV3/S.pth -b 2 --dump_images
+
+python train.py --dataset UVG --model_type HDNeRV3 --model_size M \
+        --eval_only --weight checkpoints/HDNeRV3/M.pth -b 2 --dump_images
+
+python train.py --dataset UVG --model_type HDNeRV3 --model_size L \
+        --eval_only --weight checkpoints/HDNeRV3/L.pth -b 2 --dump_images
+
+
+
+python train.py --dataset UVG --model_type HDNeRV2 --model_size S \
+        --eval_only --weight checkpoints/HDNeRV2/S.pth -b 2 --dump_images
+
+python train.py --dataset UVG --model_type HDNeRV2 --model_size M \
+        --eval_only --weight checkpoints/HDNeRV2/M.pth -b 2 --dump_images
+
+python train.py --dataset UVG --model_type HDNeRV2 --model_size L \
+        --eval_only --weight checkpoints/HDNeRV2/L.pth -b 2 --dump_images
+
+
+
+
+python train_org.py --dataset UVG --model_type D-NeRV --model_size L \
+        --eval_only --weight checkpoints/DNeRV/L.pth -b 2 --dump_images --quant_model
+
+python train_org.py --dataset UVG --model_type D-NeRV --model_size S \
+        --eval_only --weight checkpoints/DNeRV/S.pth -b 2 --dump_images
+
+python train_org.py --dataset UVG --model_type D-NeRV --model_size M \
+        --eval_only --weight checkpoints/DNeRV/M.pth -b 2 --dump_images

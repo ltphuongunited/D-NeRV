@@ -1,0 +1,12 @@
+data/
+*.tar
+logs/
+__pycache__/
+*.pth
+*.nnc
+*.mp4
+ref/
+*.o
+*.pt
+out_compress/
+compression/

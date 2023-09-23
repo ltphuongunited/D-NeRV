@@ -1,0 +1,24 @@
+hdnerv2:  
+  traditional_embedding_path: "compression/hdnerv2/traditional_embedding.pt"
+  traditional_decoder_path: "compression/hdnerv2/traditional_decoder.pth"
+
+  compress_dir: compression/hdnerv2/
+  embedding_path: "compression/hdnerv2/compressed_embedding.ncc"
+  raw_decoder_path: "compression/hdnerv2/raw_decoder.pt"
+  stream_path: "compression/hdnerv2/compressed_decoder.nnc"
+  compressed_decoder_path: "compression/hdnerv2/compressed_decoder_converted.pt"
+
+  qp: -34    
+
+
+hdnerv3:  
+  traditional_embedding_path: "compression/hdnerv3/traditional_embedding.pt"
+  traditional_decoder_path: "compression/hdnerv3/traditional_decoder.pth"
+
+  compress_dir: compression/hdnerv3/
+  embedding_path: "compression/hdnerv3/compressed_embedding.ncc"
+  raw_decoder_path: "compression/hdnerv3/raw_decoder.pt"
+  stream_path: "compression/hdnerv3/compressed_decoder.nnc"
+  compressed_decoder_path: "compression/hdnerv3/compressed_decoder_converted.pt"
+
+  qp: -34
