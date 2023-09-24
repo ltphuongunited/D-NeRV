@@ -42,7 +42,8 @@ def main():
     parser.add_argument('--strides', type=int, nargs='+', default=[4, 2, 2, 2, 2], help='strides list')
     parser.add_argument('--lower_width', type=int, default=32, help='lowest channel width for output feature maps')
     parser.add_argument('--ver', action='store_true', default=True, help='ConvNeXt Version')
-    parser.add_argument('--method', type=str, default='normal', help='Compression method')
+    parser.add_argument('--method', type=str, default=None, choices=['cabac', 'normal'], help='Compression method')
+    parser.add_argument('--qp', type=int, default=-34, help='DeepCABAC qp')
 
 
     # General training setups
@@ -161,6 +162,8 @@ def main():
     exp_id += '_dist' if args.distributed else ''
     exp_id += '_eval' if args.eval_only else ''
     exp_id += '_quant' if args.quant_model else ''
+    exp_id += '' if args.method is None else '_' + args.method 
+    exp_id += str(-args.qp) if args.method == 'cabac' else ''
 
     args.outf = os.path.join('logs', exp_id)
     os.makedirs(args.outf, exist_ok=True)
@@ -320,7 +323,10 @@ def train(local_rank, args):
 
     if args.eval_only:
         print('Evaluation ...')
-        val_psnr, val_msssim = evaluate(model, val_dataloader, PE, local_rank, args, quant_model=args.quant_model, frame_path_list=val_dataset.frame_path_list)
+        if (args.method == 'normal' or args.method == 'cabac') and (args.model_type == 'HDNeRV2' or args.model_type == 'HDNeRV3'):
+            val_psnr, val_msssim, bpp = evaluate_plus(model, val_dataloader, local_rank, args, length_dataset, frame_path_list=val_dataset.frame_path_list)
+        else:
+            val_psnr, val_msssim = evaluate(model, val_dataloader, PE, local_rank, args, quant_model=args.quant_model, frame_path_list=val_dataset.frame_path_list)
         if args.distributed and args.ngpus_per_node > 1:
             val_psnr = all_reduce(val_psnr.to(local_rank))
             val_msssim = all_reduce(val_msssim.to(local_rank))
@@ -566,20 +572,16 @@ def evaluate(model, val_dataloader, PE, local_rank, args, quant_model=False, fra
 
 
 @torch.no_grad()
-def evaluate_plus(model, val_dataloader, local_rank, args, method, length_dataset, frame_path_list=None):
+def evaluate_plus(model, val_dataloader, local_rank, args, length_dataset, frame_path_list=None):
     device = 'cuda:{}'.format(local_rank if local_rank is not None else 0)
     name = 'hdnerv2' if type(model) is HDNeRV2 else 'hdnerv3'
-
-    # args.outf = args.outf + '_' + name
     visual_dir = f'{args.outf}/visualize'
 
-    
-    config = load_yaml('config/compression.yaml')
+    config = load_yaml('compression/config.yaml')
     encoder_model = state(model, config[name]['raw_decoder_path'])
 
     ######################### Video compression #########################
-    if method == 'normal':
-        # if args.model_type == 'HDNeRV2':
+    if args.method == 'normal':
         embedding, decoder_model, total_bits = normal_compression(
                                                 model,
                                                 val_dataloader,
@@ -587,35 +589,13 @@ def evaluate_plus(model, val_dataloader, local_rank, args, method, length_datase
                                                 config[name]["raw_decoder_path"],
                                                 config[name]["traditional_embedding_path"]
                                             )
-        # if args.model_type == 'HDNeRV3':
-        #     cur_ckt = model.state_dict()
-        #     quant_weitht_list = []
-        #     for k,v in cur_ckt.items():
-        #         large_tf = (v.dim() in {2,4,5} and 'bias' not in k)
-        #         quant_v, new_v = quantize_per_tensor(v, args.quant_model_bit, args.quant_axis if large_tf else -1)
-        #         valid_quant_v = quant_v[v!=0] # only include non-zero weights
-        #         quant_weitht_list.append(valid_quant_v.flatten())
-        #         cur_ckt[k] = new_v
-        #     cat_param = torch.cat(quant_weitht_list)
-        #     input_code_list = cat_param.tolist()
-        #     unique, counts = np.unique(input_code_list, return_counts=True)
-        #     num_freq = dict(zip(unique, counts))
-
-        #     # generating HuffmanCoding table
-        #     codec = HuffmanCodec.from_data(input_code_list)
-        #     sym_bit_dict = {}
-        #     for k, v in codec.get_code_table().items():
-        #         sym_bit_dict[k] = v[0]
-        #     total_bits = 0
-        #     for num, freq in num_freq.items():
-        #         total_bits += freq * sym_bit_dict[num]
 
 
-        bpp = total_bits / (length_dataset * args.clip_size * args.spatial_size_h * args.spatial_size_w)
+        bpp = total_bits / (3900 * args.clip_size * 1024 * 1920)
 
-    elif method == 'cabac':
+    elif args.method == 'cabac':
         embedding, embed_bit = embedding_compress(
-                    val_dataloader, encoder_model, config[name]['embedding_path'], config[name]['qp']
+                    val_dataloader, encoder_model, config[name]['embedding_path'], args.qp
                 )
         decoder_model, decoder_bit = dcabac_compress(
             model,
@@ -624,12 +604,12 @@ def evaluate_plus(model, val_dataloader, local_rank, args, method, length_datase
             config[name]["qp"],
             config[name]["compressed_decoder_path"]
         )
-        bpp = (embed_bit + decoder_bit) * 8 / (length_dataset * args.clip_size * args.spatial_size_h * args.spatial_size_w)
+        bpp = (embed_bit + decoder_bit) * 8 / (3900 * args.clip_size * 1024 * 1920)
     print('BPP: ', bpp)
     ## Write BPP
     bpp_path =os.path.join(args.outf, 'bpp.json')
     with open(bpp_path, 'w') as fp:
-        bpp_dict = {method: bpp}
+        bpp_dict = {args.method: bpp}
         json.dump(bpp_dict, fp, indent=4)
 
     ######################### Evaluation #########################
@@ -641,21 +621,18 @@ def evaluate_plus(model, val_dataloader, local_rank, args, method, length_datase
                                                                 backward_distance.to(device) , frame_mask.to(device)
 
         # if args.model_type == 'HDNeRV2':
-        if method == 'normal':
+        if args.method == 'normal':
             embed = embedding[i].to(device).type(torch.cuda.FloatTensor)
             if args.model_type == 'HDNeRV2':
                 output_rgb = decoder_model(embed, backward_distance)
             if args.model_type == 'HDNeRV3':
                 output_rgb = decoder_model(embed, keyframe, backward_distance)
-        elif method == 'cabac':
+        elif args.method == 'cabac':
             embed = torch.from_numpy(embedding[str(i)]).to(device)
             if args.model_type == 'HDNeRV2':
                 output_rgb = decoder_model(embed, backward_distance)
             if args.model_type == 'HDNeRV3':
                 output_rgb = decoder_model(embed, keyframe, backward_distance)
-
-        # elif args.model_type == 'HDNeRV3':
-        #     output_rgb = model(video, keyframe=keyframe, backward_distance=backward_distance)
 
         torch.cuda.synchronize()
 

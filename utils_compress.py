@@ -23,9 +23,9 @@ def state(full_model, raw_decoder_path):
     )
     
     if type(full_model) is HDNeRV2:
-        ckpt_dict = load_yaml("config/hdnerv2.yaml")
+        ckpt_dict = load_yaml("compression/hdnerv2.yaml")
     else:
-        ckpt_dict = load_yaml("config/hdnerv3.yaml")
+        ckpt_dict = load_yaml("compression/hdnerv3.yaml")
     
     decoder_list, encoder_list = ckpt_dict["decoder"], ckpt_dict["encoder"]
 

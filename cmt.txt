@@ -38,7 +38,10 @@ python train.py --dataset UVG --model_type HDNeRV3 --model_size L \
 
 
 python train.py --dataset UVG --model_type HDNeRV2 --model_size S \
-        --eval_only --weight checkpoints/HDNeRV2/S.pth -b 2 --dump_images
+        --eval_only --weight checkpoints/HDNeRV2/S.pth -b 2 --dump_images --method normal
+
+python train.py --dataset UVG --model_type HDNeRV2 --model_size S \
+        --eval_only --weight checkpoints/HDNeRV2/S.pth -b 2 --dump_images --method cabac
 
 python train.py --dataset UVG --model_type HDNeRV2 --model_size M \
         --eval_only --weight checkpoints/HDNeRV2/M.pth -b 2 --dump_images
