@@ -578,20 +578,22 @@ def evaluate_plus(model, val_dataloader, local_rank, args, length_dataset, frame
     visual_dir = f'{args.outf}/visualize'
 
     config = load_yaml('compression/config.yaml')
-    encoder_model = state(model, config[name]['raw_decoder_path'])
+    encoder_model, decoder_model_org = state(model)
 
+    keyframe_size = {'S': 88.39, 'M': 123.2, 'L': 175.1}
     ######################### Video compression #########################
     if args.method == 'normal':
         embedding, decoder_model, total_bits = normal_compression(
                                                 model,
                                                 val_dataloader,
                                                 encoder_model,
-                                                config[name]["raw_decoder_path"],
-                                                config[name]["traditional_embedding_path"]
+                                                decoder_model_org
                                             )
 
-
-        bpp = total_bits / (3900 * args.clip_size * 1024 * 1920)
+        if args.model_type == 'HDNeRV2':
+            bpp = total_bits / (3900 * args.clip_size * 1024 * 1920)
+        elif args.model_type == 'HDNeRV3':
+            bpp = (total_bits + keyframe_size[args.model_size] * 1e6)  / (3900 * args.clip_size * 1024 * 1920)
 
     elif args.method == 'cabac':
         embedding, embed_bit = embedding_compress(
@@ -599,15 +601,18 @@ def evaluate_plus(model, val_dataloader, local_rank, args, length_dataset, frame
                 )
         decoder_model, decoder_bit = dcabac_compress(
             model,
-            config[name]["raw_decoder_path"],
+            decoder_model_org,
             config[name]["stream_path"],
             config[name]["qp"],
             config[name]["compressed_decoder_path"]
         )
-        bpp = (embed_bit + decoder_bit) * 8 / (3900 * args.clip_size * 1024 * 1920)
+        if args.model_type == 'HDNeRV2':
+            bpp = (embed_bit + decoder_bit) * 8 / (3900 * args.clip_size * 1024 * 1920)
+        elif args.model_type == 'HDNeRV3':
+            bpp = ((embed_bit + decoder_bit) * 8 + keyframe_size[args.model_size] * 1e6) / (3900 * args.clip_size * 1024 * 1920)
     print('BPP: ', bpp)
     ## Write BPP
-    bpp_path =os.path.join(args.outf, 'bpp.json')
+    bpp_path = os.path.join(args.outf, 'bpp.json')
     with open(bpp_path, 'w') as fp:
         bpp_dict = {args.method: bpp}
         json.dump(bpp_dict, fp, indent=4)

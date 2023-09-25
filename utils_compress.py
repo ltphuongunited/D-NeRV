@@ -16,7 +16,7 @@ def load_yaml(fname):
         config = yaml.safe_load(file)
     return config
 
-def state(full_model, raw_decoder_path):
+def state(full_model):
     encoder_state, decoder_state = (
         full_model.state_dict().copy(),
         full_model.state_dict().copy(),
@@ -35,17 +35,21 @@ def state(full_model, raw_decoder_path):
     for key in encoder_list:
         del decoder_state[key]  # Decoder
 
-    torch.save(decoder_state, raw_decoder_path)
 
     if type(full_model) is HDNeRV2:
         encoder_model = HDNeRV2Encoder(full_model)
+        decoder_model = HDNeRV2Decoder(full_model)
     else:
         encoder_model = HDNeRV3Encoder(full_model)
+        decoder_model = HDNeRV3Decoder(full_model)
     
     encoder_model.load_state_dict(encoder_state)
     encoder_model.eval()
 
-    return encoder_model
+    decoder_model.load_state_dict(decoder_state)
+    decoder_model.eval()
+
+    return encoder_model, decoder_model
 
 
 # DeepCABAC
@@ -69,14 +73,14 @@ def embedding_compress(dataloader, encoder_model, embedding_path, eqp):
     )
 
     embedding = nnc.decompress(embedding_path, return_model_information=True)
-
     return embedding[0], len(bit_stream)
 
 
 def dcabac_compress(
-    full_model, raw_decoder_path, stream_path, mqp, compressed_decoder_path):
+    full_model, decoder_model_org, stream_path, mqp, compressed_decoder_path):
+
     bit_stream = nnc.compress_model(
-        raw_decoder_path,
+        decoder_model_org,
         bitstream_path=stream_path,
         qp=int(mqp),
         return_bitstream=True,
@@ -245,8 +249,7 @@ def normal_compression(
     full_model,
     dataloader,
     encoder_model,
-    raw_decoder_path,
-    traditional_embedding_path
+    decoder_model_org
 ):
     # Embedding
     embedding_list = []
@@ -260,24 +263,13 @@ def normal_compression(
             feature = encoder_model(video[:,:,1:-1,:,:])
         embedding_list.append(feature.cpu().detach().numpy())
 
-    torch.save(torch.Tensor(embedding_list), traditional_embedding_path)
-
-    # Decoder
-    if type(full_model) is HDNeRV2:
-        decoder_model = HDNeRV2Decoder(full_model)
-    else:
-        decoder_model = HDNeRV3Decoder(full_model)
-
-    decoder_model.load_state_dict(torch.load(raw_decoder_path))
-    decoder_model.eval()
-
     # Quantization
     print('Quantization')
     quantize_embedding, _ = quantize_tensor_full(
-        torch.load(traditional_embedding_path), num_bits=6
+        torch.Tensor(embedding_list), num_bits=8
     )
-    quantized_model, quantized_model_state = quantize_model(decoder_model, num_bits=8)
 
+    quantized_model, quantized_model_state = quantize_model(decoder_model_org, num_bits=8)
     # Huffman Encoding
     print('Huffman Encoding')
     bits_per_param, total_bits = huffman_encoding(
