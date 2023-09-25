@@ -43,7 +43,7 @@ def main():
     parser.add_argument('--lower_width', type=int, default=32, help='lowest channel width for output feature maps')
     parser.add_argument('--ver', action='store_true', default=True, help='ConvNeXt Version')
     parser.add_argument('--method', type=str, default=None, choices=['cabac', 'normal'], help='Compression method')
-    parser.add_argument('--qp', type=int, default=-34, help='DeepCABAC qp')
+    parser.add_argument('--qp', type=int, default=-20, help='DeepCABAC qp')
 
 
     # General training setups
@@ -625,7 +625,7 @@ def evaluate_plus(model, val_dataloader, local_rank, args, length_dataset, frame
         video, keyframe, backward_distance, frame_mask = video.to(device),keyframe.to(device),  \
                                                                 backward_distance.to(device) , frame_mask.to(device)
 
-        # if args.model_type == 'HDNeRV2':
+
         if args.method == 'normal':
             embed = embedding[i].to(device).type(torch.cuda.FloatTensor)
             if args.model_type == 'HDNeRV2':
