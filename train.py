@@ -677,6 +677,8 @@ def evaluate_plus(model, val_dataloader, local_rank, args, length_dataset, frame
     # and re-evaluate the PSNR/MS-SSIM results on 1024x1920 resolution
     if args.dataset == 'UVG' and os.path.exists(visual_dir):
         val_psnr, val_msssim = evaluate_UVG(visual_dir, device)
+        if args.model_size != 'L':
+            os.rmdir(visual_dir)
     return val_psnr, val_msssim, bpp
 
 if __name__ == '__main__':

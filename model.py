@@ -285,8 +285,6 @@ class HDNeRV2(nn.Module):
                 forward_warp = self.wk_list(start_key_feature, forward_flow)     # (3)
                 backward_warp = self.wk_list(end_key_feature, backward_flow)     # (3)
                 # distance-aware weighted sum
-                print(backward_warp.shape)
-                print(backward_distance.shape)
                 fused_warp = forward_warp * forward_distance + backward_warp * backward_distance    # (1 - t) * forward_warp + t * backward_warp (4)
                 output = self.decoder_list[i](output, fused_warp)
             elif i < self.num_stages:
