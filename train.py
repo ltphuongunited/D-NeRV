@@ -47,7 +47,7 @@ def main():
 
 
     # General training setups
-    parser.add_argument('-j', '--workers', type=int, help='number of data loading workers', default=4)
+    parser.add_argument('-j', '--workers', type=int, help='number of data loading workers', default=8)
     parser.add_argument('-b', '--batchSize', type=int, default=2, help='input batch size')
     parser.add_argument('-e', '--epochs', type=int, default=400, help='number of epochs to train for')
     parser.add_argument('--warmup', type=float, default=0.2, help='warmup epoch ratio compared to the epochs, default=0.2')
