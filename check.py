@@ -1,20 +1,9 @@
-from torchvision import models
+# from torchvision import models
 import torch
-from model import ConvNeXtVideo
-import torch.nn as nn
-from backbone.convnext import ConvNeXt
-from backbone.convnextv2 import ConvNeXtV2
-# from models.raftcore.raft_nerv import raft_ready
-from models.utils import *
-# from models.CURE import Fuser
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-image = torch.rand(1,3,256,320).to(device)
-model = ConvNeXtV2(depths=[3, 3, 9, 3,3],dims=[64, 64, 64, 64, 64]).to(device)
-output = model(image)
-for i in output:
-    print(i.shape)
+model = torch.load('checkpoints/HDNeRV3/M.pth')
+print(model['epoch'])
+print(model['train_best_psnr'])
+print(model['train_best_msssim'])
 # OF = raft_ready().to(device)
 # orig_ckt = torch.load('models/raft-things.pth')
 # if 'module' in list(orig_ckt.keys())[0] and not hasattr(OF, 'module'):
