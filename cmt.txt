@@ -60,3 +60,5 @@ python train_org.py --dataset UVG --model_type D-NeRV --model_size S \
 
 python train_org.py --dataset UVG --model_type D-NeRV --model_size M \
         --eval_only --weight checkpoints/DNeRV/M.pth -b 2 --dump_images
+
+python train.py --model_type HDNeRV2 --model_size L -b 4 --lr 1e-10 --weight checkpoints/HDNeRV2/L.pth -d

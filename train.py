@@ -49,7 +49,7 @@ def main():
     # General training setups
     parser.add_argument('-j', '--workers', type=int, help='number of data loading workers', default=8)
     parser.add_argument('-b', '--batchSize', type=int, default=2, help='input batch size')
-    parser.add_argument('-e', '--epochs', type=int, default=400, help='number of epochs to train for')
+    parser.add_argument('-e', '--epochs', type=int, default=1600, help='number of epochs to train for')
     parser.add_argument('--warmup', type=float, default=0.2, help='warmup epoch ratio compared to the epochs, default=0.2')
     parser.add_argument('--lr', type=float, default=5e-4, help='learning rate, default=0.0002')
     parser.add_argument('--lr_type', type=str, default='cos', help='learning rate type, default=cos')
@@ -113,6 +113,8 @@ def main():
                 'S' : {'fc_dim': 48, 'enc_dim': [80, 80, 80, 80, 40], 'keyframe_quality': 3},
                 'M' : {'fc_dim': 64, 'enc_dim': [120, 120, 120, 120, 64], 'keyframe_quality': 4},
                 'L' : {'fc_dim': 64, 'enc_dim': [160, 160, 160, 160, 92], 'keyframe_quality': 5},
+                'XL' : {'fc_dim': 64, 'enc_dim': [40, 80, 160, 320, 320], 'keyframe_quality': 5},
+                'XXL' : {'fc_dim': 64, 'enc_dim': [40, 80, 160, 320, 320], 'keyframe_quality': 5},
             }
     elif args.dataset == 'UCF101':
         if args.model_type == 'D-NeRV' or args.model_type == 'RAFT_t':
@@ -584,9 +586,10 @@ def evaluate_plus(model, val_dataloader, local_rank, args, length_dataset, frame
     encoder_model, decoder_model_org = state(model)
 
     keyframe_size = {'S': 88.39, 'M': 123.2, 'L': 175.1}
+    NUM_PIXEL = (3900 * 1024 * 1920)
     ######################### Video compression #########################
     if args.method == 'normal':
-        embedding, decoder_model, total_bits = normal_compression(
+        embedding, decoder_model, total_bits_model, total_bits_embed = normal_compression(
                                                 model,
                                                 val_dataloader,
                                                 encoder_model,
@@ -594,30 +597,43 @@ def evaluate_plus(model, val_dataloader, local_rank, args, length_dataset, frame
                                             )
 
         if args.model_type == 'HDNeRV2':
-            bpp = total_bits / (3900 * args.clip_size * 1024 * 1920)
+            bpp1 = (total_bits_model + total_bits_embed) / NUM_PIXEL
+            bpp2 = (total_bits_model + total_bits_embed/24) / NUM_PIXEL
         elif args.model_type == 'HDNeRV3':
-            bpp = (total_bits + keyframe_size[args.model_size] * 1e6)  / (3900 * args.clip_size * 1024 * 1920)
+            # bpp = (total_bits + keyframe_size[args.model_size] * 1e6)  / (3900 * 1024 * 1920)
+            bpp1 = (total_bits_model + total_bits_embed + keyframe_size[args.model_size] * 1e6) / NUM_PIXEL
+            bpp2 = (total_bits_model + total_bits_embed/24+ keyframe_size[args.model_size] * 1e6) / NUM_PIXEL
 
     elif args.method == 'cabac':
         embedding, embed_bit = embedding_compress(
-                    val_dataloader, encoder_model, config[name]['embedding_path'], args.qp
+                    val_dataloader, 
+                    encoder_model, 
+                    config[name]['compression_dir'], 
+                    config[name]['embedding_path'], 
+                    args.qp, 
+                    args.model_size
                 )
         decoder_model, decoder_bit = dcabac_compress(
             model,
             decoder_model_org,
             config[name]["stream_path"],
-            config[name]["qp"],
-            config[name]["compressed_decoder_path"]
+            args.qp,
+            config[name]['compression_dir'], 
+            config[name]["compressed_decoder_path"],
+            args.model_size
         )
         if args.model_type == 'HDNeRV2':
-            bpp = (embed_bit + decoder_bit) * 8 / (3900 * args.clip_size * 1024 * 1920)
+            bpp1 = (embed_bit + decoder_bit) * 8 / NUM_PIXEL
+            bpp2 = (embed_bit/18 + decoder_bit) * 8 / NUM_PIXEL
         elif args.model_type == 'HDNeRV3':
-            bpp = ((embed_bit + decoder_bit) * 8 + keyframe_size[args.model_size] * 1e6) / (3900 * args.clip_size * 1024 * 1920)
-    print('BPP: ', bpp)
+            bpp1 = ((embed_bit + decoder_bit) * 8 + keyframe_size[args.model_size] * 1e6) / NUM_PIXEL
+            bpp2 = ((embed_bit/18 + decoder_bit) * 8 + keyframe_size[args.model_size] * 1e6) / NUM_PIXEL
+    print('BPP non-scale: ', bpp1)
+    print('BPP scale', bpp2)
     ## Write BPP
     bpp_path = os.path.join(args.outf, 'bpp.json')
     with open(bpp_path, 'w') as fp:
-        bpp_dict = {args.method: bpp}
+        bpp_dict = {'khong chia 24': bpp1, 'chia 24': bpp2}
         json.dump(bpp_dict, fp, indent=4)
 
     ######################### Evaluation #########################
@@ -680,9 +696,10 @@ def evaluate_plus(model, val_dataloader, local_rank, args, length_dataset, frame
     # and re-evaluate the PSNR/MS-SSIM results on 1024x1920 resolution
     if args.dataset == 'UVG' and os.path.exists(visual_dir):
         val_psnr, val_msssim = evaluate_UVG(visual_dir, device)
-        if args.model_size != 'L':
-            os.rmdir(visual_dir)
-    return val_psnr, val_msssim, bpp
+        # if args.model_size != 'L':
+        import shutil
+        shutil.rmtree(visual_dir)
+    return val_psnr, val_msssim, bpp1
 
 if __name__ == '__main__':
     main()

@@ -1,0 +1,13 @@
+hdnerv2:
+  compression_dir: compression/hdnerv2
+  embedding_path: "ompressed_embedding.ncc"
+  raw_decoder_path: "raw_decoder.pt"
+  stream_path: "compressed_decoder.nnc"
+  compressed_decoder_path: "compressed_decoder_converted.pt"
+
+hdnerv3:
+  compression_dir: compression/hdnerv3
+  embedding_path: "ompressed_embedding.ncc"
+  raw_decoder_path: "raw_decoder.pt"
+  stream_path: "compressed_decoder.nnc"
+  compressed_decoder_path: "compressed_decoder_converted.pt"

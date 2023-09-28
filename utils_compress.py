@@ -53,9 +53,14 @@ def state(full_model):
 
 
 # DeepCABAC
-def embedding_compress(dataloader, encoder_model, embedding_path, eqp):
+def embedding_compress(dataloader, encoder_model, compressdir, embedding_path, eqp, model_size):
     embedding = defaultdict()
 
+    compressdir_size = os.path.join(compressdir, model_size)
+    if not os.path.exists(compressdir_size):
+        os.mkdir(compressdir_size)
+
+    embedding_path_size = os.path.join(compressdir_size, embedding_path) 
 
     for batch_idx, (video, norm_idx, keyframe, backward_distance, frame_mask) in tqdm(enumerate(dataloader)):
         video = video.cuda()
@@ -67,32 +72,39 @@ def embedding_compress(dataloader, encoder_model, embedding_path, eqp):
 
     bit_stream = nnc.compress(
         parameter_dict=embedding,
-        bitstream_path=embedding_path,
+        bitstream_path=embedding_path_size,
         qp=eqp,
         return_bitstream=True,
     )
 
-    embedding = nnc.decompress(embedding_path, return_model_information=True)
+    embedding = nnc.decompress(embedding_path_size, return_model_information=True)
     return embedding[0], len(bit_stream)
 
 
 def dcabac_compress(
-    full_model, decoder_model_org, stream_path, mqp, compressed_decoder_path):
+    full_model, decoder_model_org, stream_path, mqp, compressdir, compressed_decoder_path, model_size):
+
+    compressdir_size = os.path.join(compressdir, model_size)
+    if not os.path.exists(compressdir_size):
+        os.mkdir(compressdir_size)
+    
+    compressed_decoder_path_size = os.path.join(compressdir_size, compressed_decoder_path)
+    stream_path_size = os.path.join(compressdir_size, stream_path)
 
     bit_stream = nnc.compress_model(
         decoder_model_org,
-        bitstream_path=stream_path,
+        bitstream_path=stream_path_size,
         qp=int(mqp),
         return_bitstream=True,
     )
-    nnc.decompress_model(stream_path, model_path=compressed_decoder_path)
+    nnc.decompress_model(stream_path_size, model_path=compressed_decoder_path_size)
 
     if type(full_model) is HDNeRV2:
         decoder_model = HDNeRV2Decoder(full_model)
     else:
         decoder_model = HDNeRV3Decoder(full_model)
 
-    decoder_model.load_state_dict(torch.load(compressed_decoder_path))
+    decoder_model.load_state_dict(torch.load(compressed_decoder_path_size))
     decoder_model.eval()
 
     return decoder_model, len(bit_stream)
@@ -197,12 +209,31 @@ def quantize_model(model, num_bits=8):
 
 def huffman_encoding(quantized_embedding, quantized_weights):
     # Embedding
-    quantized_values_list = quantized_embedding["quantized"].flatten().tolist()
+    quantized_values_list1 = quantized_embedding["quantized"].flatten().tolist()
 
-    min_scale_length = (
+    min_scale_length1 = (
         quantized_embedding["min"].nelement() + quantized_embedding["scale"].nelement()
     )
+    # Compute the frequency of each unique value
+    unique_values1, counts1 = np.unique(quantized_values_list1, return_counts=True)
+    value_frequency1 = dict(zip(unique_values1, counts1))
+
+    # Generate Huffman coding table
+    codec1 = HuffmanCodec.from_data(quantized_values_list1)
+    symbol_bit_dictionary1 = {
+        key: value[0] for key, value in codec1.get_code_table().items()
+    }
+
+    # Compute total bits for quantized data
+    total_bits1 = sum(
+        freq * symbol_bit_dictionary1[num] for num, freq in value_frequency1.items()
+    )
+
+    # Include the overhead for min and scale storage
+    total_bits1 += min_scale_length1 * 16  # (16 bits for float16)
     
+    quantized_values_list = []
+    min_scale_length = 0
     # Decoder weights
     for key, layer_weights in quantized_weights.items():
         quantized_values_list.extend(layer_weights["quantized"].flatten().tolist())
@@ -228,11 +259,47 @@ def huffman_encoding(quantized_embedding, quantized_weights):
 
     # Include the overhead for min and scale storage
     total_bits += min_scale_length * 16  # (16 bits for float16)
+    # total_bits += total_bits1 / 24
     full_bits_per_param = total_bits / len(quantized_values_list)
 
-    return full_bits_per_param, total_bits
+    return full_bits_per_param, total_bits, total_bits1
 
+# def huffman_encoding(quantized_embedding, quantized_weights):
+#     # Embedding
+#     quantized_values_list = quantized_embedding["quantized"].flatten().tolist()
 
+#     min_scale_length = (
+#         quantized_embedding["min"].nelement() + quantized_embedding["scale"].nelement()
+#     )
+    
+#     # Decoder weights
+#     for key, layer_weights in quantized_weights.items():
+#         quantized_values_list.extend(layer_weights["quantized"].flatten().tolist())
+
+#         min_scale_length += (
+#             layer_weights["min"].nelement() + layer_weights["scale"].nelement()
+#         )
+
+#     # Compute the frequency of each unique value
+#     unique_values, counts = np.unique(quantized_values_list, return_counts=True)
+#     value_frequency = dict(zip(unique_values, counts))
+
+#     # Generate Huffman coding table
+#     codec = HuffmanCodec.from_data(quantized_values_list)
+#     symbol_bit_dictionary = {
+#         key: value[0] for key, value in codec.get_code_table().items()
+#     }
+
+#     # Compute total bits for quantized data
+#     total_bits = sum(
+#         freq * symbol_bit_dictionary[num] for num, freq in value_frequency.items()
+#     )
+
+#     # Include the overhead for min and scale storage
+#     total_bits += min_scale_length * 16  # (16 bits for float16)
+#     full_bits_per_param = total_bits / len(quantized_values_list)
+
+#     return full_bits_per_param, total_bits
 def dequantize_tensor(quantization_data):
     quantized_tensor = quantization_data["quantized"]
     min_value = quantization_data["min"]
@@ -244,6 +311,43 @@ def dequantize_tensor(quantization_data):
     reconstructed_tensor = expanded_min_value + expanded_scale_factor * quantized_tensor
     return reconstructed_tensor
 
+
+# def normal_compression(
+#     full_model,
+#     dataloader,
+#     encoder_model,
+#     decoder_model_org
+# ):
+#     # Embedding
+#     embedding_list = []
+
+
+#     for batch_idx, (video, norm_idx, keyframe, backward_distance, frame_mask) in tqdm(enumerate(dataloader)):
+#         video = video.cuda()
+#         if type(full_model) is HDNeRV2:
+#             feature = encoder_model(video)
+#         else:
+#             feature = encoder_model(video[:,:,1:-1,:,:])
+#         embedding_list.append(feature.cpu().detach().numpy())
+
+#     # Quantization
+#     print('Quantization')
+#     quantize_embedding, _ = quantize_tensor_full(
+#         torch.Tensor(embedding_list), num_bits=8
+#     )
+
+#     quantized_model, quantized_model_state = quantize_model(decoder_model_org, num_bits=8)
+#     # Huffman Encoding
+#     print('Huffman Encoding')
+#     bits_per_param, total_bits = huffman_encoding(
+#         quantize_embedding, quantized_model_state
+#     )
+
+#     # Dequantization
+#     print('Dequantization')
+#     embedding = dequantize_tensor(quantize_embedding)
+
+#     return embedding, quantized_model, total_bits
 
 def normal_compression(
     full_model,
@@ -272,7 +376,7 @@ def normal_compression(
     quantized_model, quantized_model_state = quantize_model(decoder_model_org, num_bits=8)
     # Huffman Encoding
     print('Huffman Encoding')
-    bits_per_param, total_bits = huffman_encoding(
+    bits_per_param, total_bits_model, total_bits_embed = huffman_encoding(
         quantize_embedding, quantized_model_state
     )
 
@@ -280,4 +384,4 @@ def normal_compression(
     print('Dequantization')
     embedding = dequantize_tensor(quantize_embedding)
 
-    return embedding, quantized_model, total_bits
+    return embedding, quantized_model, total_bits_model, total_bits_embed
