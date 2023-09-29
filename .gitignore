@@ -9,3 +9,5 @@ ref/
 *.o
 *.pt
 out_compress/
+compression/hdnerv2
+compression/hdnerv3
