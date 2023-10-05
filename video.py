@@ -32,5 +32,7 @@ if __name__=='__main__':
             in_video_dir = os.path.join(in_model_path, video)
             out_video_dir = os.path.join(out_model_path, '{}.mp4'.format(video))
             images_to_video(in_video_dir, out_video_dir, 30)
+    
+    
 
         

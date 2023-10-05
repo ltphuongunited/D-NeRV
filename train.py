@@ -571,8 +571,8 @@ def evaluate(model, val_dataloader, PE, local_rank, args, quant_model=False, fra
     if args.dataset == 'UVG' and os.path.exists(visual_dir):
         val_psnr, val_msssim = evaluate_UVG(visual_dir, device)
         # if args.model_size != 'L':
-        import shutil
-        shutil.rmtree(visual_dir)
+        # import shutil
+        # shutil.rmtree(visual_dir)
     return val_psnr, val_msssim
 
 

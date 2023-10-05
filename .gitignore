@@ -9,5 +9,8 @@ ref/
 *.o
 *.pt
 out_compress/
-compression/hdnerv2
-compression/hdnerv3
+compression/hdnerv2/
+compression/hdnerv3/
+merge_images
+*.png
+video/
